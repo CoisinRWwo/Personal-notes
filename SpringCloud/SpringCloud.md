@@ -6553,3 +6553,1266 @@ management:
 通知总结
 
 ![img](SpringCloud.assets/ccd5fcc8293edec24d7e889e189d0bfe.png)
+
+
+
+## 83_Stream为什么被引入
+
+常见MQ(消息中间件)：
+
+- ActiveMQ
+- RabbitMQ
+- RocketMQ
+- Kafka
+
+有没有一种新的技术诞生，让我们不再关注具体MQ的细节，我们只需要用一种适配绑定的方式，自动的给我们在各种MQ内切换。（类似于Hibernate）
+
+Cloud Stream是什么？屏蔽底层消息中间件的差异，降低切换成本，统一消息的**编程模型**。
+
+
+
+## 84_Stream是什么及Binder介绍
+
+[官方文档1](https://spring.io/projects/spring-cloud-stream#overview)
+
+[官方文档2](https://cloud.spring.io/spring-tloud-static/spring-cloud-stream/3.0.1.RELEASE/reference/html/Spring)
+
+[Cloud Stream中文指导手册](https://m.wang1314.com/doc/webapp/topic/20971999.html)
+
+
+
+**什么是Spring Cloud Stream？**
+
+官方定义Spring Cloud Stream是一个构建消息驱动微服务的框架。
+
+应用程序通过inputs或者 outputs 来与Spring Cloud Stream中binder对象交互。
+
+
+
+通过我们配置来binding(绑定)，而Spring Cloud Stream 的binder对象负责与消息中间件交互。所以，我们只需要搞清楚如何与Spring Cloud Stream交互就可以方便使用消息驱动的方式。
+
+
+
+通过使用Spring Integration来连接消息代理中间件以实现消息事件驱动。
+Spring Cloud Stream为一些供应商的消息中间件产品提供了个性化的自动化配置实现，引用了发布-订阅、消费组、分区的三个核心概念。
+
+
+
+目前仅支持RabbitMQ、 Kafka。
+
+
+
+## 85_Stream的设计思想
+
+**标准MQ**
+
+![img](SpringCloud.assets/dd57e502418ecdae99f29991abe8bb02.png)
+
+- 生产者/消费者之间靠**消息**媒介传递信息内容
+
+- 消息必须走特定的通道 - 消息通道 Message Channel
+
+- 消息通道里的消息如何被消费呢，谁负责收发处理 - 消息通道MessageChannel的子接口SubscribableChannel，由MessageHandler消息处理器所订阅。
+
+
+
+**为什么用Cloud Stream？**
+
+比方说我们用到了RabbitMQ和Kafka，由于这两个消息中间件的架构上的不同，像RabbitMQ有exchange，kafka有Topic和Partitions分区。
+
+![img](SpringCloud.assets/5587b05def1c26b8c9d9874c78f80b28.png)
+
+这些中间件的差异性导致我们实际项目开发给我们造成了一定的困扰，我们如果用了两个消息队列的其中一种，后面的业务需求，我想往另外一种消息队列进行迁移，这时候无疑就是一个灾难性的，一大堆东西都要重新推倒重新做，因为它跟我们的系统耦合了，这时候Spring Cloud Stream给我们提供了—种解耦合的方式。
+
+
+**Stream凭什么可以统一底层差异？**
+
+在没有绑定器这个概念的情况下，我们的SpringBoot应用要直接与消息中间件进行信息交互的时候，由于各消息中间件构建的初衷不同，它们的实现细节上会有较大的差异性通过定义绑定器作为中间层，完美地实现了应用程序与消息中间件细节之间的隔离。通过向应用程序暴露统一的Channel通道，使得应用程序不需要再考虑各种不同的消息中间件实现。
+
+**通过定义绑定器Binder作为中间层，实现了应用程序与消息中间件细节之间的隔离**。
+
+
+
+**Binder**：
+
+- INPUT对应于消费者
+- OUTPUT对应于生产者
+
+![img](SpringCloud.assets/96256569e677453570b55209c26e0b8c.png)
+
+**Stream中的消息通信方式遵循了发布-订阅模式**
+
+Topic主题进行广播
+
+- 在RabbitMQ就是Exchange
+- 在Kakfa中就是Topic
+
+
+
+## 86_Stream编码常用注解简介
+
+**Spring Cloud Stream标准流程套路**
+
+![img](SpringCloud.assets/077a3b34aec6eed91a7019a9d5ca4e3c.png)
+
+![img](SpringCloud.assets/1ca02dd31581d92a7a610bcd137f6848.png)
+
+- Binder - 很方便的连接中间件，屏蔽差异。
+
+- Channel - 通道，是队列Queue的一种抽象，在消息通讯系统中就是实现存储和转发的媒介，通过Channel对队列进行配置。
+
+- Source和Sink - 简单的可理解为参照对象是Spring Cloud Stream自身，从Stream发布消息就是输出，接受消息就是输入。
+
+
+
+**编码API和常用注解**
+
+| 组成            | **说明**                                                     |
+| --------------- | ------------------------------------------------------------ |
+| Middleware      | 中间件，目前只支持RabbitMQ和Kafka                            |
+| Binder          | Binder是应用与消息中间件之间的封装，目前实行了Kafka和RabbitMQ的Binder，通过Binder可以很方便的连接中间件，可以动态的改变消息类型(对应于Kafka的topic,RabbitMQ的exchange)，这些都可以通过配置文件来实现 |
+| @Input          | 注解标识输入通道，通过该输乎通道接收到的消息进入应用程序     |
+| @Output         | 注解标识输出通道，发布的消息将通过该通道离开应用程序         |
+| @StreamListener | 监听队列，用于消费者的队列的消息接收                         |
+| @EnableBinding  | 指信道channel和exchange绑定在一起                            |
+
+
+
+**案例说明**
+
+准备RabbitMQ环境（[79_Bus之RabbitMQ环境配置](https://blog.csdn.net/u011863024/article/details/114298282#)有提及）
+
+工程中新建三个子模块
+
+- cloud-stream-rabbitmq-provider8801，作为生产者进行发消息模块
+- cloud-stream-rabbitmq-consumer8802，作为消息接收模块
+- cloud-stream-rabbitmq-consumer8803，作为消息接收模块
+
+
+
+## 87_Stream消息驱动之生产者
+
+新建Module：cloud-stream-rabbitmq-provider8801
+
+POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>LearnCloud</artifactId>
+        <groupId>com.lun.springcloud</groupId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-stream-rabbitmq-provider8801</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rabbit</artifactId>
+        </dependency>
+        <!--基础配置-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+YML
+
+```yml
+server:
+  port: 8801
+
+spring:
+  application:
+    name: cloud-stream-provider
+  cloud:
+      stream:
+        binders: # 在此处配置要绑定的rabbitmq的服务信息；
+          defaultRabbit: # 表示定义的名称，用于于binding整合
+            type: rabbit # 消息组件类型
+            environment: # 设置rabbitmq的相关的环境配置
+              spring:
+                rabbitmq:
+                  host: localhost
+                  port: 5672
+                  username: guest
+                  password: guest
+        bindings: # 服务的整合处理
+          output: # 这个名字是一个通道的名称
+            destination: studyExchange # 表示要使用的Exchange名称定义
+            content-type: application/json # 设置消息类型，本次为json，文本则设置“text/plain”
+            binder: defaultRabbit # 设置要绑定的消息服务的具体设置
+
+eureka:
+  client: # 客户端进行Eureka注册的配置
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 # 设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # 如果现在超过了5秒的间隔（默认是90秒）
+    instance-id: send-8801.com  # 在信息列表时显示主机名称
+    prefer-ip-address: true     # 访问的路径变为IP地址
+```
+
+主启动类StreamMQMain8801
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class StreamMQMain8801 {
+    public static void main(String[] args) {
+        SpringApplication.run(StreamMQMain8801.class,args);
+    }
+}
+```
+
+业务类
+
+1.发送消息接口
+
+```java
+public interface IMessageProvider {
+    public String send();
+}
+```
+
+2.发送消息接口实现类
+
+```java
+import com.lun.springcloud.service.IMessageProvider;
+import org.springframework.cloud.stream.annotation.EnableBinding;
+import org.springframework.cloud.stream.messaging.Source;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.MessageChannel;
+
+import javax.annotation.Resource;
+import java.util.UUID;
+
+
+@EnableBinding(Source.class) //定义消息的推送管道
+public class MessageProviderImpl implements IMessageProvider
+{
+    @Resource
+    private MessageChannel output; // 消息发送管道
+
+    @Override
+    public String send()
+    {
+        String serial = UUID.randomUUID().toString();
+        output.send(MessageBuilder.withPayload(serial).build());
+        System.out.println("*****serial: "+serial);
+        return null;
+    }
+}
+```
+
+3.Controller
+
+```java
+import com.lun.springcloud.service.IMessageProvider;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.annotation.Resource;
+
+@RestController
+public class SendMessageController
+{
+    @Resource
+    private IMessageProvider messageProvider;
+
+    @GetMapping(value = "/sendMessage")
+    public String sendMessage() {
+        return messageProvider.send();
+    }
+
+}
+```
+
+测试
+
+- 启动 7001eureka
+- 启动 RabpitMq（[79_Bus之RabbitMQ环境配置](https://blog.csdn.net/u011863024/article/details/114298282#)）
+  - rabbitmq-plugins enable rabbitmq_management
+  - http://localhost:15672/
+- 启动 8801
+- 访问 - http://localhost:8801/sendMessage
+  - 后台将打印`serial: UUID`字符串
+
+
+
+## 88_Stream消息驱动之消费者
+
+新建Module：cloud-stream-rabbitmq-consumer8802
+
+POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>LearnCloud</artifactId>
+        <groupId>com.lun.springcloud</groupId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-stream-rabbitmq-consumer8802</artifactId>
+    
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rabbit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!--基础配置-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+YML
+
+```yml
+server:
+  port: 8802
+
+spring:
+  application:
+    name: cloud-stream-consumer
+  cloud:
+      stream:
+        binders: # 在此处配置要绑定的rabbitmq的服务信息；
+          defaultRabbit: # 表示定义的名称，用于于binding整合
+            type: rabbit # 消息组件类型
+            environment: # 设置rabbitmq的相关的环境配置
+              spring:
+                rabbitmq:
+                  host: localhost
+                  port: 5672
+                  username: guest
+                  password: guest
+        bindings: # 服务的整合处理
+          input: # 这个名字是一个通道的名称
+            destination: studyExchange # 表示要使用的Exchange名称定义
+            content-type: application/json # 设置消息类型，本次为对象json，如果是文本则设置“text/plain”
+            binder: defaultRabbit # 设置要绑定的消息服务的具体设置
+
+eureka:
+  client: # 客户端进行Eureka注册的配置
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 # 设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # 如果现在超过了5秒的间隔（默认是90秒）
+    instance-id: receive-8802.com  # 在信息列表时显示主机名称
+    prefer-ip-address: true     # 访问的路径变为IP地址
+```
+
+主启动类StreamMQMain8802
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class StreamMQMain8802 {
+    public static void main(String[] args) {
+        SpringApplication.run(StreamMQMain8802.class,args);
+    }
+}
+```
+
+业务类
+
+```java
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.stream.annotation.EnableBinding;
+import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.cloud.stream.messaging.Sink;
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+
+
+@Component
+@EnableBinding(Sink.class)
+public class ReceiveMessageListenerController
+{
+    @Value("${server.port}")
+    private String serverPort;
+
+
+    @StreamListener(Sink.INPUT)
+    public void input(Message<String> message)
+    {
+        System.out.println("消费者1号,----->接受到的消息: "+message.getPayload()+"\t  port: "+serverPort);
+    }
+}
+```
+
+测试
+
+- 启动EurekaMain7001
+- 启动StreamMQMain8801
+- 启动StreamMQMain8802
+- 8801发送8802接收消息
+
+
+
+## 89_Stream之消息重复消费
+
+依照8802，克隆出来一份运行8803 - cloud-stream-rabbitmq-consumer8803。
+
+**启动**
+
+- RabbitMQ
+- 服务注册 - 8801
+- 消息生产 - 8801
+- 消息消费 - 8802
+- 消息消费 - 8802
+
+
+
+**运行后有两个问题**
+
+1. 有重复消费问题
+2. 消息持久化问题
+
+
+
+**消费**
+
+- http://localhost:8801/sendMessage
+- 目前是8802/8803同时都收到了，存在重复消费问题
+- 如何解决：分组和持久化属性group（重要）
+
+
+
+**生产实际案例**
+
+比如在如下场景中，订单系统我们做集群部署，都会从RabbitMQ中获取订单信息，那如果一个订单同时被两个服务获取到，那么就会造成数据错误，我们得避免这种情况。这时我们就可以**使用Stream中的消息分组来解决**。
+
+![img](SpringCloud.assets/f61e83441af907a42e8886368bde59ff.png)
+
+注意在Stream中处于同一个group中的多个消费者是竞争关系，就能够保证消息只会被其中一个应用消费一次。不同组是可以全面消费的(重复消费)。
+
+
+
+## 90_Stream之group解决消息重复消费
+
+**原理**
+
+微服务应用放置于同一个group中，就能够保证消息只会被其中一个应用消费一次。
+
+**不同的组**是可以重复消费的，**同一个组**内会发生竞争关系，只有其中一个可以消费。
+
+**8802/8803都变成不同组，group两个不同**
+
+group: A_Group、B_Group
+
+8802修改YML
+
+```yml
+spring:
+  application:
+    name: cloud-stream-provider
+  cloud:
+      stream:
+        binders: # 在此处配置要绑定的rabbitmq的服务信息；
+          defaultRabbit: # 表示定义的名称，用于于binding整合
+            type: rabbit # 消息组件类型
+            environment: # 设置rabbitmq的相关的环境配置
+              spring:
+                rabbitmq:
+                  host: localhost
+                  port: 5672
+                  username: guest
+                  password: guest
+        bindings: # 服务的整合处理
+          output: # 这个名字是一个通道的名称
+            destination: studyExchange # 表示要使用的Exchange名称定义
+            content-type: application/json # 设置消息类型，本次为json，文本则设置“text/plain”
+            binder: defaultRabbit # 设置要绑定的消息服务的具体设置
+            group: A_Group #<----------------------------------------关键
+```
+
+8803修改YML（与8802的类似位置 `group: B_Group`）
+
+结论：**还是重复消费**
+
+8802/8803实现了轮询分组，每次只有一个消费者，8801模块的发的消息只能被8802或8803其中一个接收到，这样避免了重复消费。
+
+**8802/8803都变成相同组，group两个相同**
+
+group: A_Group
+
+8802修改YML`group: A_Group`
+
+8803修改YML`group: A_Group`
+
+结论：同一个组的多个微服务实例，每次只会有一个拿到
+
+
+
+## 91_Stream之消息持久化
+
+通过上述，解决了重复消费问题，再看看持久化。
+
+停止8802/8803并**去除掉**8802的分组`group: A_Group`，8803的分组`group: A_Group`没有去掉。
+
+8801先发送4条消息到RabbitMq。
+
+先启动8802，**无分组属性配置**，后台没有打出来消息。
+
+再启动8803，**有分组属性配置**，后台打出来了MQ上的消息。(消息持久化体现)
+
+
+
+## 92_Sleuth是什么
+
+**为什么会出现这个技术？要解决哪些问题？**
+
+在微服务框架中，一个由客户端发起的请求在后端系统中会经过多个不同的的服务节点调用来协同产生最后的请求结果，每一个前段请求都会形成一条复杂的分布式服务调用链路，链路中的任何一环出现高延时或错误都会引起整个请求最后的失败。
+
+![img](SpringCloud.assets/b40478e2b2c83d7181b9c71cdcae05ea.png)
+
+![链路多起来的情况](SpringCloud.assets/f97d15b5686264d45b46f6f188e99873.png)
+
+**是什么**
+
+- https://github.com/spring-cloud/spring-cloud-sleuth
+- Spring Cloud Sleuth提供了一套完整的服务跟踪的解决方案
+- 在分布式系统中提供追踪解决方案并且兼容支持了zipkin
+
+**解决**
+
+![img](SpringCloud.assets/ca541262b26f809a0c25014feaa069d7.png)
+
+
+
+## 93_Sleuth之zipkin搭建安装
+
+1.zipkin
+
+**下载**
+
+- SpringCloud从F版起已不需要自己构建Zipkin Server了，只需调用jar包即可
+
+- https://dl.bintray.com/openzipkin/maven/io/zipkin/java/zipkin-server/
+
+- zipkin-server-2.12.9-exec.jar
+
+
+
+**运行jar**
+
+```
+java -jar zipkin-server-2.12.9-exec.jar
+```
+
+**运行控制台**
+
+http://localhost:9411/zipkin/
+
+
+
+**术语**
+
+完整的调用链路
+
+表示一请求链路，一条链路通过Trace ld唯一标识，Span标识发起的请求信息，各span通过parent id关联起来
+
+![img](SpringCloud.assets/ec45d9d026fee8c83eaaf7bf8cb6893d.png)
+
+—条链路通过Trace ld唯一标识，Span标识发起的请求信息，各span通过parent id关联起来
+
+![img](SpringCloud.assets/f75fcfd2146df03428b9c8c53d13c1f1.png)
+
+整个链路的依赖关系如下：
+
+![img](SpringCloud.assets/c1d19c5e9724578ee9c8668903685fa4.png)
+
+名词解释
+
+- Trace：类似于树结构的Span集合，表示一条调用链路，存在唯一标识
+- span：表示调用链路来源，通俗的理解span就是一次请求信息
+
+
+
+## 94_Sleuth链路监控展现
+
+2.服务提供者
+
+cloud-provider-payment8001
+
+POM
+
+```xml
+<!--包含了sleuth+zipkin-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-zipkin</artifactId>
+</dependency>
+```
+
+YML
+
+```yml
+
+spring:
+  application:
+    name: cloud-payment-service
+
+  zipkin: #<-------------------------------------关键 
+      base-url: http://localhost:9411
+  sleuth: #<-------------------------------------关键
+    sampler:
+    #采样率值介于 0 到 1 之间，1 则表示全部采集
+    probability: 1
+    
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource            # 当前数据源操作类型
+    driver-class-name: org.gjt.mm.mysql.Driver              # mysql驱动包
+    url: jdbc:mysql://localhost:3306/db2019?useUnicode=true&characterEncoding=utf-8&useSSL=false
+    username: root
+    password: 123456
+```
+
+业务类PaymentController
+
+```java
+@RestController
+@Slf4j
+public class PaymentController {
+    
+    ...
+    
+ 	@GetMapping("/payment/zipkin")
+    public String paymentZipkin() {
+        return "hi ,i'am paymentzipkin server fall back，welcome to here, O(∩_∩)O哈哈~";
+    }    
+}
+```
+
+
+
+3.服务消费者(调用方)
+
+cloue-consumer-order80
+
+POM
+
+```xml
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-zipkin</artifactId>
+</dependency>
+```
+
+YML
+
+```yml
+spring:
+    application:
+        name: cloud-order-service
+    zipkin:
+      base-url: http://localhost:9411
+    sleuth:
+      sampler:
+        probability: 1
+```
+
+业务类OrderController
+
+```java
+    // ====================> zipkin+sleuth
+    @GetMapping("/consumer/payment/zipkin")
+    public String paymentZipkin()
+    {
+        String result = restTemplate.getForObject("http://localhost:8001"+"/payment/zipkin/", String.class);
+        return result;
+    }
+}
+```
+
+4.依次启动eureka7001/8001/80 - 80调用8001几次测试下
+
+5.打开浏览器访问: http://localhost:9411
+
+![img](SpringCloud.assets/733ad2e18037059045ec80cb59d8d2a3.png)
+
+
+
+## 95_Cloud Alibaba简介
+
+**为什么会出现SpringCloud alibaba**
+
+Spring Cloud Netflix项目进入维护模式
+
+https://spring.io/blog/2018/12/12/spring-cloud-greenwich-rc1-available-now
+
+什么是维护模式？
+
+将模块置于维护模式，意味着Spring Cloud团队将不会再向模块添加新功能。
+
+他们将修复block级别的 bug 以及安全问题，他们也会考虑并审查社区的小型pull request。
+
+**SpringCloud alibaba带来了什么**
+
+**是什么**
+
+[官网](https://github.com/alibaba/spring-cloud-alibaba/blob/master/README-zh.md)
+
+Spring Cloud Alibaba 致力于提供微服务开发的一站式解决方案。此项目包含开发分布式应用微服务的必需组件，方便开发者通过 Spring Cloud 编程模型轻松使用这些组件来开发分布式应用服务。
+
+依托 Spring Cloud Alibaba，您只需要添加一些注解和少量配置，就可以将 Spring Cloud 应用接入阿里微服务解决方案，通过阿里中间件来迅速搭建分布式应用系统。
+
+诞生：2018.10.31，Spring Cloud Alibaba 正式入驻了Spring Cloud官方孵化器，并在Maven 中央库发布了第一个版本。
+
+
+
+**能干嘛**
+
+- **服务限流降级**：默认支持 WebServlet、WebFlux, OpenFeign、RestTemplate、Spring Cloud Gateway, Zuul, Dubbo 和 RocketMQ 限流降级功能的接入，可以在运行时通过控制台实时修改限流降级规则，还支持查看限流降级 Metrics 监控。
+- **服务注册与发现**：适配 Spring Cloud 服务注册与发现标准，默认集成了 Ribbon 的支持。
+
+- **分布式配置管理**：支持分布式系统中的外部化配置，配置更改时自动刷新。
+- **消息驱动能力**：基于 Spring Cloud Stream 为微服务应用构建消息驱动能力。
+
+- **分布式事务**：使用 @GlobalTransactional 注解， 高效并且对业务零侵入地解决分布式事务问题。
+- **阿里云对象存储**：阿里云提供的海量、安全、低成本、高可靠的云存储服务。支持在任何应用、任何时间、任何地点存储和访问任意类型的数据。
+
+- **分布式任务调度**：提供秒级、精准、高可靠、高可用的定时（基于 Cron 表达式）任务调度服务。同时提供分布式的任务执行模型，如网格任务。网格任务支持海量子任务均匀分配到所有 Worker（schedulerx-client）上执行。
+
+- **阿里云短信服务**：覆盖全球的短信服务，友好、高效、智能的互联化通讯能力，帮助企业迅速搭建客户触达通道。
+
+
+
+**去哪下**
+
+如果需要使用已发布的版本，在 `dependencyManagement` 中添加如下配置。
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+            <version>2.2.5.RELEASE</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+然后在 `dependencies` 中添加自己所需使用的依赖即可使用。
+
+
+
+**怎么玩**
+
+- **[Sentinel](https://github.com/alibaba/Sentinel)**：把流量作为切入点，从流量控制、熔断降级、系统负载保护等多个维度保护服务的稳定性。
+
+- **[Nacos](https://github.com/alibaba/Nacos)**：一个更易于构建云原生应用的动态服务发现、配置管理和服务管理平台。
+
+- **[RocketMQ](https://rocketmq.apache.org/)**：一款开源的分布式消息系统，基于高可用分布式集群技术，提供低延时的、高可靠的消息发布与订阅服务。
+
+- **[Dubbo](https://github.com/apache/dubbo)**：Apache Dubbo™ 是一款高性能 Java RPC 框架。
+
+- **[Seata](https://github.com/seata/seata)**：阿里巴巴开源产品，一个易于使用的高性能微服务分布式事务解决方案。
+
+- **[Alibaba Cloud OSS](https://www.aliyun.com/product/oss)**: 阿里云对象存储服务（Object Storage Service，简称 OSS），是阿里云提供的海量、安全、低成本、高可靠的云存储服务。您可以在任何应用、任何时间、任何地点存储和访问任意类型的数据。
+
+- **[Alibaba Cloud SchedulerX](https://help.aliyun.com/document_detail/43136.html)**: 阿里中间件团队开发的一款分布式任务调度产品，提供秒级、精准、高可靠、高可用的定时（基于 Cron 表达式）任务调度服务。
+
+- **[Alibaba Cloud SMS](https://www.aliyun.com/product/sms)**: 覆盖全球的短信服务，友好、高效、智能的互联化通讯能力，帮助企业迅速搭建客户触达通道。
+
+
+
+**Spring Cloud Alibaba学习资料获取**
+
+- 官网
+  - https://spring.io/projects/spring-cloud-alibaba#overview
+- 英文
+  - https://github.com/alibaba/spring-cloud-alibaba
+  - https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html
+- 中文
+  - https://github.com/alibaba/spring-cloud-alibaba/blob/master/README-zh.md
+
+
+
+## 96_Nacos简介和下载
+
+**为什么叫Nacos**
+
+- 前四个字母分别为Naming和Configuration的前两个字母，最后的s为Service。
+
+
+
+**是什么**
+
+- 一个更易于构建云原生应用的动态服务发现、配置管理和服务管理平台。
+- Nacos: Dynamic Naming and Configuration Service
+- Nacos就是注册中心＋配置中心的组合 -> **Nacos = Eureka+Config+Bus**
+
+
+
+**能干嘛**
+
+- 替代Eureka做服务注册中心
+- 替代Config做服务配置中心
+
+
+
+去哪下
+
+- https://github.com/alibaba/nacos/releases
+- [官网文档](https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html#_spring cloud alibaba nacos_discovery)
+
+
+
+**各中注册中心比较**
+
+| 服务注册与发现框架 | CAP模型 | 控制台管理 |   社区活跃度    |
+| :----------------: | :-----: | :--------: | :-------------: |
+|       Eureka       |   AP    |    支持    | 低(2.x版本闭源) |
+|     Zookeeper      |   CP    |   不支持   |       中        |
+|       consul       |   CP    |    支持    |       高        |
+|       Nacos        |   AP    |    支持    |       高        |
+
+据说Nacos在阿里巴巴内部有超过10万的实例运行，已经过了类似双十一等各种大型流量的考验。
+
+
+
+## 97_Nacos安装
+
+- 本地Java8+Maven环境已经OK先
+- 从[官网](https://github.com/alibaba/nacos/releases)下载Nacos
+- 解压安装包，直接运行bin目录下的startup.cmd
+- 命令运行成功后直接访问http://localhost:8848/nacos，默认账号密码都是nacos
+- 结果页面
+
+
+
+![img](SpringCloud.assets/a3ad68ab8165ff76356641c1f49a7683.png)
+
+
+
+## 98_Nacos之服务提供者注册
+
+[官方文档](https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html#_spring_cloud_alibaba_nacos_discovery)
+
+新建Module - cloudalibaba-provider-payment9001
+
+POM
+
+父POM
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <!--spring cloud alibaba 2.1.0.RELEASE-->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+            <version>2.1.0.RELEASE</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+本模块POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloudalibaba-provider-payment9001</artifactId>
+
+    <dependencies>
+        <!--SpringCloud ailibaba nacos -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <!-- SpringBoot整合Web组件 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!--日常通用jar包配置-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+YML
+
+```yml
+server:
+  port: 9001
+
+spring:
+  application:
+    name: nacos-payment-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 #配置Nacos地址
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+主启动
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+@EnableDiscoveryClient
+@SpringBootApplication
+public class PaymentMain9001 {
+    public static void main(String[] args) {
+            SpringApplication.run(PaymentMain9001.class, args);
+    }
+}
+```
+
+业务类
+
+```java
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class PaymentController {
+    @Value("${server.port}")
+    private String serverPort;
+
+    @GetMapping(value = "/payment/nacos/{id}")
+    public String getPayment(@PathVariable("id") Integer id) {
+        return "nacos registry, serverPort: "+ serverPort+"\t id"+id;
+    }
+}
+```
+
+测试
+
+- http://localhost:9001/payment/nacos/1
+- nacos控制台
+- nacos服务注册中心+服务提供者9001都OK了
+
+
+
+为了下一章节演示nacos的负载均衡，参照9001新建9002
+
+- 新建cloudalibaba-provider-payment9002
+- 9002其它步骤你懂的
+- 或者**取巧**不想新建重复体力劳动，可以利用IDEA功能，直接拷贝虚拟端口映射
+
+![img](SpringCloud.assets/2bef79cd8f72b8f23b815b49f4ba07ce.png)
+
+
+
+## 99_Nacos之服务消费者注册和负载
+
+新建Module - cloudalibaba-consumer-nacos-order83
+
+POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>LearnCloud</artifactId>
+        <groupId>com.lun.springcloud</groupId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloudalibaba-consumer-nacos-order83</artifactId>
+
+    <dependencies>
+        <!--SpringCloud ailibaba nacos -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <!-- 引入自己定义的api通用包，可以使用Payment支付Entity -->
+        <dependency>
+            <groupId>com.lun.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <!-- SpringBoot整合Web组件 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!--日常通用jar包配置-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+为什么nacos支持负载均衡？因为spring-cloud-starter-alibaba-nacos-discovery内含netflix-ribbon包。
+
+YML
+
+```yml
+server:
+  port: 83
+
+spring:
+  application:
+    name: nacos-order-consumer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+#消费者将要去访问的微服务名称(注册成功进nacos的微服务提供者)
+service-url:
+  nacos-user-service: http://nacos-payment-provider
+```
+
+主启动
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+
+@EnableDiscoveryClient
+@SpringBootApplication
+public class OrderNacosMain83
+{
+    public static void main(String[] args)
+    {
+        SpringApplication.run(OrderNacosMain83.class,args);
+    }
+}
+```
+
+业务类
+
+ApplicationContextConfig
+
+```java
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+
+@Configuration
+public class ApplicationContextConfig
+{
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate()
+    {
+        return new RestTemplate();
+    }
+}
+```
+
+OrderNacosController
+
+```java
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import javax.annotation.Resource;
+
+@RestController
+@Slf4j
+public class OrderNacosController {
+    
+    @Resource
+    private RestTemplate restTemplate;
+
+    @Value("${service-url.nacos-user-service}")
+    private String serverURL;
+
+    @GetMapping(value = "/consumer/payment/nacos/{id}")
+    public String paymentInfo(@PathVariable("id") Long id)
+    {
+        return restTemplate.getForObject(serverURL+"/payment/nacos/"+id,String.class);
+    }
+
+}
+```
+
+测试
+
+- 启动nacos控制台
+- http://localhost:83/Eonsumer/payment/nacos/13
+  - 83访问9001/9002，轮询负载OK
+
+
+
+## 100_Nacos服务注册中心对比提升
+
+**Nacos全景图**
+
+![nacos全景图](SpringCloud.assets/a9c35ea022a95aa76bfec990d6b73d8a.jpeg)
+
+**Nacos和CAP**
+
+Nacos与其他注册中心特性对比
+
+![Nacos与其他注册中心特性对比](SpringCloud.assets/62d5a8566a2dc588a5ed52346049a054.png)
+
+**Nacos服务发现实例模型**
+
+![Nacos服务发现实例模型](SpringCloud.assets/6578e36df056a995a39034045c36fc40.png)
+
+
+
+**Nacos支持AP和CP模式的切换**
+
+C是所有节点在同一时间看到的数据是一致的;而A的定义是所有的请求都会收到响应。
+
+
+
+何时选择使用何种模式?
+
+—般来说，如果不需要存储服务级别的信息且服务实例是通过nacos-client注册，并能够保持心跳上报，那么就可以选择AP模式。当前主流的服务如Spring cloud和Dubbo服务，都适用于AP模式，AP模式为了服务的可能性而减弱了一致性，因此AP模式下只支持注册临时实例。
+
+如果需要在服务级别编辑或者存储配置信息，那么CP是必须，K8S服务和DNS服务则适用于CP模式。CP模式下则支持注册持久化实例，此时则是以Raft协议为集群运行模式，该模式下注册实例之前必须先注册服务，如果服务不存在，则会返回错误。
+
+
+
+切换命令：
+
+```
+curl -X PUT '$NACOS_SERVER:8848/nacos/v1/ns/operator/switches?entry=serverMode&value=CP
+```
