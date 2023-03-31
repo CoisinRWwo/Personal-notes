@@ -1125,7 +1125,7 @@ public class GlobalExceptionHandler {
 
 #### 3、处理特定异常
 
-##### 3.1、添加异常处理方法 
+##### 3.1、添加异常处理方法
 
 **GlobalExceptionHandler.java中添加**
 
