@@ -45,7 +45,7 @@
 
 
 
-### CISC与RISC
+### CISC与RISC111
 
 ![image-20230410141552460](note.assets/image-20230410141552460.png)
 
