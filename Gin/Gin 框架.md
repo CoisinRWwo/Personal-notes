@@ -649,3 +649,349 @@ user := UserInfo{
 
 
 #### 8、预定义函数 （了解）
+
+执行模板时，函数从两个函数字典中查找：首先是模板函数字典，然后是全局函数字典。一般不在模板内定义函数，而是使用 Funcs 方法添加函数到模板里。
+
+预定义的全局函数如下：
+
+**and** 函数返回它的第一个 empty 参数或者最后一个参数； 就是说"and x y"等价于"if x then y else x"；所有参数都会执行；
+
+**or** 返回第一个非 empty 参数或者最后一个参数； 亦即"or x y"等价于"if x then x else y"；所有参数都会执行；
+
+**not** 返回它的单个参数的布尔值的否定
+
+**en** 返回它的参数的整数类型长度
+
+**index** 执行结果为第一个参数以剩下的参数为索引/键指向的值； 如"index x 1 2 3"返回 x[1][2][3]的值；每个被索引的主体必须是数组、切片或者字典。
+
+**print** 即 fmt.Sprint
+
+**printf** 即 fmt.Sprintf
+
+**println** 即 fmt.Sprintln
+
+**html** 返回与其参数的文本表示形式等效的转义 HTML。 这个函数在 html/template 中不可用。
+
+**urlquery** 以适合嵌入到网址查询中的形式返回其参数的文本表示的转义值。这个函数在 html/template 中不可用。
+
+**js** 返回与其参数的文本表示形式等效的转义 JavaScript。
+
+**call** 执行结果是调用第一个参数的返回值，该参数必须是函数类型，其余参数作为调用该函数的参数；
+
+​	如"call .X.Y 1 2"等价于 go 语言里的 dot.X.Y(1, 2)； 
+
+​	其中 Y 是函数类型的字段或者字典的值，或者其他类似情况； 
+
+​	call 的第一个参数的执行结果必须是函数类型的值（和预定义函数如print 明显不同）；
+
+​	该函数类型值必须有 1 到 2 个返回值，如果有 2 个则后一个必须是error 接口类型；
+
+​	如果有 2 个返回值的方法返回的 error 非 nil，模板执行会中断并返回给调用模板执行者该错误；
+
+```go
+{{len .title}}
+{{index 
+```
+
+
+
+#### 9、自定义模板函数
+
+```go
+router.SetFuncMap(template.FuncMap{ 
+    "formatDate": formatAsDate, 
+})
+```
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"time"
+)
+
+func formatAsDate(t time.Time) string {
+	year, month, day := t.Date()
+	return fmt.Sprintf("%d/%02d/%02d", year, month, day)
+}
+
+func main() {
+	router := gin.Default()
+    
+	//注册全局模板函数 注意顺序，注册模板函数需要在加载模板上面
+    router.SetFuncMap(template.FuncMap{ "formatDate": formatAsDate, })
+    
+	//加载模板
+	router.LoadHTMLGlob("templates/**/*")
+    
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "default/index.html", map[string]interface{}{
+            "title": "前台首页", 
+            "now": time.Now()
+        })
+	})
+	router.Run(":8080")
+}
+
+```
+
+模板里面的用法
+
+```go
+{{.now | formatDate}}
+或者
+{{formatDate .now }}
+```
+
+
+
+### 5.4、嵌套 template
+
+**1、新建 templates/deafult/page_header.html**
+
+```html
+{{ define "default/page_header.html" }}
+    <h1>这是一个头部</h1>
+{{end}}
+```
+
+**2、外部引入**
+
+**注意：**
+
+1、引入的名字为 page_header.html 中定义的名字 
+
+2、引入的时候注意最后的点（.）
+
+```html
+{{template "default/page_header.html" .}}
+```
+
+```html
+<!-- 相当于给模板定义一个名字 define end 成对出现-->
+{{ define "default/index.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        {{template "default/page_header.html" .}}
+    </body>
+    </html>
+{{end}}
+```
+
+
+
+## 六、静态文件服务
+
+当我们渲染的 HTML 文件中引用了静态文件时,我们需要配置静态 web 服务
+
+r.Static("/static", "./static") 	前面的/static 表示路由 	后面的./static 表示路径
+
+```go
+func main() {
+    r := gin.Default()
+    r.Static("/static", "./static")
+    r.LoadHTMLGlob("templates/**/*")
+    // ... r.Run(":8080")
+}
+```
+
+```html
+<link rel="stylesheet" href="/static/css/base.css" />
+```
+
+
+
+## 七、路由详解
+
+路由（Routing）是由一个 URI（或者叫路径）和一个特定的 HTTP 方法（GET、POST 等）组成的，涉及到应用如何响应客户端对某个网站节点的访问。
+
+
+
+### 7.1、GET POST 以及获取 Get Post 传值
+
+
+
+#### 7.1.1、Get 请求传值
+
+```
+GET /user?uid=20&page=1
+```
+
+```go
+router.GET("/user", func(c *gin.Context) {
+    uid := c.Query("uid")
+    page := c.DefaultQuery("page", "0")
+    c.String(200, "uid=%v page=%v", uid, page)
+})
+```
+
+
+
+#### 7.1.2、动态路由传值
+
+```
+域名/user/20
+```
+
+```go
+r.GET("/user/:uid", func(c *gin.Context) {
+    uid := c.Param("uid")
+    c.String(200, "userID=%s", uid)
+})
+```
+
+
+
+#### 7.1.3、Post 请求传值 获取 form 表单数据
+
+定义一个 add_user.html 的页面
+
+```html
+{{ define "default/add_user.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        <form action="/doAddUser" method="post">
+            用户名：<input type="text" name="username" />
+            密码: <input type="password" name="password" />
+            <input type="submit" value="提交">
+        </form>
+    </body>
+    </html>
+{{end}}
+```
+
+通过 c.PostForm 接收表单传过来的数据
+
+```go
+    router.GET("/addUser", func(c *gin.Context) {
+            c.HTML(200, "default/add_user.html", gin.H{})
+        })
+	router.POST("/doAddUser", func(c *gin.Context) {
+		username := c.PostForm("username")
+		password := c.PostForm("password")
+		age := c.DefaultPostForm("age", "20")
+		c.JSON(200, gin.H{
+            "usernmae": username, 
+            "password": password, "age": age
+        })
+	})
+```
+
+
+
+#### 7.1.4、获取 GET POST 传递的数据绑定到结构体
+
+为了能够更方便的获取请求相关参数，提高开发效率，我们可以基于请求的Content-Type识别请求数据类型并利用反射机制自动提取请求中 QueryString、form 表单、JSON、XML 等参数到结构体中。 下面的示例代码演示了.ShouldBind()强大的功能，它能够基于请求自动提取 JSON、form 表单和 QueryString 类型的数据，并把值绑定到指定的结构体对象。
+
+```go
+//注意首字母大写
+type Userinfo struct {
+	Username string `form:"username" json:"user"` 
+    Password string `form:"password" json:"password"` 
+}
+```
+
+
+
+**Get 传值绑定到结构体**
+
+```powershell
+/?username=zhangsan&password=123456
+```
+
+```go
+router.GET("/", func(c *gin.Context) {
+    var userinfo Userinfo
+    if err := c.ShouldBind(&userinfo); err == nil {
+        c.JSON(http.StatusOK, userinfo)
+    } else {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+    }
+})
+```
+
+返回数据
+
+```json
+{"user":"zhangsan","password":"123456"}
+```
+
+
+
+**Post 传值绑定到结构体**
+
+```go
+router.POST("/doLogin", func(c *gin.Context) {
+    var userinfo Userinfo
+    if err := c.ShouldBind(&userinfo); err == nil {
+        c.JSON(http.StatusOK, userinfo)
+    } else {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+})
+```
+
+返回数据
+
+```json
+{"user":"zhangsan","password":"123456"}
+```
+
+
+
+
+
+#### 7.1.5、获取 Post Xml 数据
+
+在 API 的开发中，我们经常会用到 JSON 或 XML 来作为数据交互的格式，这个时候我们可以在 gin 中使用 c.GetRawData()获取数据。
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<article>
+    <content type="string">我是张三</content>
+    <title type="string">张三</title>
+</article>
+```
+
+![image-20230805192727116](./Gin%20%E6%A1%86%E6%9E%B6.assets/image-20230805192727116.png)
+
+```go
+type Article struct {
+    Title string `xml:"title"` 
+    Content string `xml:"content"` 
+}
+
+
+router.POST("/xml", func(c *gin.Context) {
+    b, _ := c.GetRawData() // 从 c.Request.Body 
+    
+    article := &Article{}
+    
+    if err := xml.Unmarshal(b, &article); err == nil {
+        c.JSON(http.StatusOK, article)
+    } else {
+        c.JSON(http.StatusBadRequest, err.Error())
+    }
+})
+```
+
+
+
+### 7.2、简单的路由组
