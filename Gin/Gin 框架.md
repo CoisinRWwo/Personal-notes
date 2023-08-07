@@ -995,3 +995,997 @@ router.POST("/xml", func(c *gin.Context) {
 
 
 ### 7.2、简单的路由组
+
+https://gin-gonic.com/zh-cn/docs/examples/grouping-routes/
+
+```go
+unc main() {
+	router := gin.Default()
+	// 简单的路由组: v1
+	v1 := router.Group("/v1")
+	{
+		v1.POST("/login", loginEndpoint)
+		v1.POST("/submit", submitEndpoint)
+		v1.POST("/read", readEndpoint)
+	}
+	// 简单的路由组: v2
+	v2 := router.Group("/v2")
+	{
+		v2.POST("/login", loginEndpoint)
+		v2.POST("/submit", submitEndpoint)
+		v2.POST("/read", readEndpoint)
+	}
+	router.Run(":8080")
+}
+```
+
+
+
+### 7.3、Gin 路由文件 分组
+
+7.3.1、新建 routes 文件夹，routes 文件下面新建 adminRoutes.go、apiRoutes.go、defaultRoutes.go
+
+**1、新建 adminRoutes.go**
+
+```go
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func AdminRoutesInit(router *gin.Engine) {
+	adminRouter := router.Group("/admin")
+	{
+		adminRouter.GET("/user", func(c *gin.Context) {
+			c.String(http.StatusOK, "用户")
+		})
+		adminRouter.GET("/news", func(c *gin.Context) {
+			c.String(http.StatusOK, "news")
+		})
+	}
+}
+
+```
+
+**2、新建 apiRoutes.go**
+
+```go
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func ApiRoutesInit(router *gin.Engine) {
+	apiRoute := router.Group("/api")
+	{
+		apiRoute.GET("/user", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+                "username": "张三",
+				"age": 20
+            })
+		})
+		apiRoute.GET("/news", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+                "title": "这是新闻"
+            })
+		})
+	}
+}
+
+```
+
+
+
+**3、新建 defaultRoutes.go**
+
+```go
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+)
+
+func DefaultRoutesInit(router *gin.Engine) {
+	defaultRoute := router.Group("/")
+	{
+		defaultRoute.GET("/", func(c *gin.Context) {
+			c.String(200, "首页")
+		})
+	}
+}
+
+```
+
+
+
+**7.3.2 、配置 main.go**
+
+```go
+package main
+
+import (
+	"gin_demo/routes"
+	"github.com/gin-gonic/gin"
+)
+
+//注意首字母大写
+type Userinfo struct {
+	Username string `form:"username" json:"user"` 
+    Password string `form:"password" json:"password"`
+}
+
+func main() {
+	r := gin.Default()
+	routes.AdminRoutesInit(r)
+	routes.ApiRoutesInit(r)
+	routes.DefaultRoutesInit(r)
+	r.Run(":8080")
+}
+
+```
+
+访问 /api/user /admin/user 测试
+
+
+
+## 八、Gin 中自定义控制器
+
+
+
+### 8.1、控制器分组
+
+当我们的项目比较大的时候有必要对我们的控制器进行分组
+
+**新建 controller/admin/NewsController.go**
+
+```go
+package admin
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+type NewsController struct {
+}
+
+func (c NewsController) Index(ctx *gin.Context) {
+	ctx.String(http.StatusOK, "新闻首页")
+}
+
+```
+
+
+
+**新建 controller/admin/UserController.go**
+
+```go
+package admin
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+type UserController struct {
+}
+
+func (c UserController) Index(ctx *gin.Context) {
+	ctx.String(http.StatusOK, "这是用户首页")
+}
+func (c UserController) Add(ctx *gin.Context) {
+	ctx.String(http.StatusOK, "增加用户")
+}
+
+```
+
+....
+
+
+
+**配置对应的路由 --adminRoutes.go**
+
+其他路由的配置方法类似
+
+```go
+package routes
+
+import (
+	"gin_demo/controller/admin"
+	"github.com/gin-gonic/gin"
+)
+
+func AdminRoutesInit(router *gin.Engine) {
+	adminRouter := router.Group("/admin")
+	{
+		adminRouter.GET("/user", admin.UserController{}.Index)
+		adminRouter.GET("/user/add", admin.UserController{}.Add)
+		adminRouter.GET("/news", admin.NewsController{}.Add)
+	}
+}
+
+```
+
+
+
+### 8.2、控制器的继承
+
+**1、新建 controller/admin/BaseController.go**
+
+```go
+package admin
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+type BaseController struct {
+}
+
+func (c BaseController) Success(ctx *gin.Context) {
+	ctx.String(http.StatusOK, "成功")
+}
+func (c BaseController) Error(ctx *gin.Context) {
+	ctx.String(http.StatusOK, "失败")
+}
+```
+
+
+
+**2、NewsController 继承 BaseController**
+
+继承后就可以调用控制器里面的公共方法了
+
+```go
+package admin
+
+import (
+	"github.com/gin-gonic/gin"
+)
+
+type NewsController struct {
+	BaseController
+}
+
+func (c NewsController) Index(ctx *gin.Context) {
+	c.Success(ctx)
+}
+
+```
+
+
+
+## 九、Gin 中间件
+
+Gin 框架允许开发者在处理请求的过程中，加入用户自己的钩子（Hook）函数。这个钩子函数就叫中间件，中间件适合处理一些公共的业务逻辑，比如登录认证、权限校验、数据分页、记录日志、耗时统计等。
+
+**通俗的讲**：中间件就是匹配路由前和匹配路由完成后执行的一系列操作
+
+
+
+### 9.1、路由中间件
+
+#### 9.1.1、初识中间件
+
+Gin 中的中间件必须是一个 gin.HandlerFunc 类型，配置路由的时候可以传递多个func 回调函数，最后一个 func 回调函数前面触发的方法都可以称为中间件。
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func initMiddleware(ctx *gin.Context) {
+	fmt.Println("我是一个中间件")
+}
+func main() {
+	r := gin.Default()
+	r.GET("/", initMiddleware, func(ctx *gin.Context) {
+		ctx.String(200, "首页--中间件演示")
+	})
+	r.GET("/news", initMiddleware, func(ctx *gin.Context) {
+		ctx.String(200, "新闻页面--中间件演示")
+	})
+	r.Run(":8080")
+}
+
+```
+
+
+
+#### 9.1.2、ctx.Next()
+
+调用该请求的剩余处理程序
+
+中间件里面加上 ctx.Next()可以让我们在路由匹配完成后执行一些操作。比如我们统计一个请求的执行时间。
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"time"
+)
+
+func initMiddleware(ctx *gin.Context) {
+	fmt.Println("1-执行中中间件")
+	start := time.Now().UnixNano()
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+	fmt.Println("3-程序执行完成 计算时间")
+	// 计算耗时 Go 语言中的 Since()函数保留时间值，并用于评估与实际时间的差异
+	end := time.Now().UnixNano()
+	fmt.Println(end - start)
+}
+
+func main() {
+	r := gin.Default()
+	r.GET("/", initMiddleware, func(ctx *gin.Context) {
+		fmt.Println("2-执行首页返回数据")
+		ctx.String(200, "首页--中间件演示")
+	})
+	r.GET("/news", initMiddleware, func(ctx *gin.Context) {
+		ctx.String(200, "新闻页面--中间件演示")
+	})
+	r.Run(":8080")
+}
+
+```
+
+
+
+#### 9.1.3、一个路由配置多个中间件的执行顺序
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func initMiddlewareOne(ctx *gin.Context) {
+	fmt.Println("initMiddlewareOne--1-执行中中间件")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+	fmt.Println("initMiddlewareOne--2-执行中中间件")
+}
+
+func initMiddlewareTwo(ctx *gin.Context) {
+	fmt.Println("initMiddlewareTwo--1-执行中中间件")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+	fmt.Println("initMiddlewareTwo--2-执行中中间件")
+}
+
+func main() {
+	r := gin.Default()
+	r.GET("/", initMiddlewareOne, initMiddlewareTwo, func(ctx *gin.Context) {
+		fmt.Println("执行路由里面的程序")
+		ctx.String(200, "首页--中间件演示")
+	})
+	r.Run(":8080")
+}
+
+```
+
+**控制台内容：**
+
+```go
+initMiddlewareOne--1-执行中中间件
+initMiddlewareTwo--1-执行中中间件
+执行路由里面的程序
+initMiddlewareTwo--2-执行中中间件
+initMiddlewareOne--2-执行中中间件
+```
+
+
+
+#### 9.1.4、 c.Abort()--（了解）
+
+Abort 是终止的意思， c.Abort() 表示终止调用该请求的剩余处理程序
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func initMiddlewareOne(ctx *gin.Context) {
+	fmt.Println("initMiddlewareOne--1-执行中中间件")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+	fmt.Println("initMiddlewareOne--2-执行中中间件")
+}
+
+func initMiddlewareTwo(ctx *gin.Context) {
+	fmt.Println("initMiddlewareTwo--1-执行中中间件")
+	// 终止调用该请求的剩余处理程序
+	ctx.Abort()
+	fmt.Println("initMiddlewareTwo--2-执行中中间件")
+}
+
+func main() {
+	r := gin.Default()
+	r.GET("/", initMiddlewareOne, initMiddlewareTwo, func(ctx *gin.Context) {
+		fmt.Println("执行路由里面的程序")
+		ctx.String(200, "首页--中间件演示")
+	})
+	r.Run(":8080")
+}
+
+```
+
+```go
+initMiddlewareOne--1-执行中间件
+initMiddlewareTwo--1-执行中间件
+initMiddlewareTwo--2-执行中间件
+initMiddlewareOne--2-执行中间件
+```
+
+
+
+### 9.2、全局中间件
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func initMiddleware(ctx *gin.Context) {
+	fmt.Println("全局中间件 通过 r.Use 配置")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+}
+
+func main() {
+	r := gin.Default()
+	r.Use(initMiddleware)
+	r.GET("/", func(ctx *gin.Context) {
+		ctx.String(200, "首页--中间件演示")
+	})
+	r.GET("/news", func(ctx *gin.Context) {
+		ctx.String(200, "新闻页面--中间件演示")
+	})
+	r.Run(":8080")
+}
+
+```
+
+
+
+### 9.3、在路由分组中配置中间件
+
+**1、为路由组注册中间件有以下两种写法**
+
+
+
+写法 1：
+
+```go
+shopGroup := r.Group("/shop", StatCost())
+{
+    shopGroup.GET("/index", func(c *gin.Context) {...})
+    ... 
+}
+```
+
+
+
+写法 2：
+
+```go
+shopGroup := r.Group("/shop")
+shopGroup.Use(StatCost())
+{
+    shopGroup.GET("/index", func(c *gin.Context) {...})
+    ... 
+}
+```
+
+
+
+**2、分组路由 AdminRoutes.go 中配置中间件**
+
+```go
+package routes
+
+import (
+	"fmt"
+	"gin_demo/controller/admin"
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func initMiddleware(ctx *gin.Context) {
+	fmt.Println("路由分组中间件")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+}
+func AdminRoutesInit(router *gin.Engine) {
+	adminRouter := router.Group("/admin", initMiddleware)
+	{
+		adminRouter.GET("/user", admin.UserController{}.Index)
+		adminRouter.GET("/user/add", admin.UserController{}.Add)
+		adminRouter.GET("/news", func(c *gin.Context) {
+			c.String(http.StatusOK, "news")
+		})
+	}
+}
+
+```
+
+
+
+### 9.4、中间件和对应控制器之间共享数据
+
+设置值
+
+```go
+ctx.Set("username", "张三")
+```
+
+获取值
+
+```go
+username, _ := ctx.Get("username")
+```
+
+中间件设置值
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func InitAdminMiddleware(ctx *gin.Context) {
+	fmt.Println("路由分组中间件")
+	// 可以通过 ctx.Set 在请求上下文中设置值，后续的处理函数能够取到该值
+    ctx.Set("username", "张三")
+	// 调用该请求的剩余处理程序
+	ctx.Next()
+}
+
+```
+
+控制器获取值
+
+```go
+func (c UserController) Index(ctx *gin.Context) {
+    username, _ := ctx.Get("username")
+    fmt.Println(username)
+    ctx.String(http.StatusOK, "这是用户首页 111")
+}
+```
+
+
+
+### 9.5、中间件注意事项
+
+**gin 默认中间件**
+
+gin.Default()默认使用了 Logger 和 Recovery 中间件，其中：
+
+• Logger 中间件将日志写入 gin.DefaultWriter，即使配置了 GIN_MODE=release。
+
+• Recovery 中间件会 recover 任何 panic。如果有 panic 的话，会写入500 响应码。
+
+如果不想使用上面两个默认的中间件，可以使用 gin.New()新建一个没有任何默认中间件的路由
+
+
+
+**gin 中间件中使用 goroutine**
+
+当在中间件或 handler 中启动新的 goroutine 时，不能使用原始的上下文（c *gin.Context），必须使用其只读副本（c.Copy()）
+
+```go
+r.GET("/", func(c *gin.Context) {
+    cCp := c.Copy()
+    go func() {
+        // simulate a long task with time.Sleep(). 5 seconds
+        time.Sleep(5 * time.Second)
+        
+        // 这里使用你创建的副本
+        fmt.Println("Done! in path " + cCp.Request.URL.Path)
+    }()
+    c.String(200, "首页")
+})
+```
+
+
+
+## 十、Gin 中自定义Model
+
+
+
+### 10.1、关于 Model
+
+如果我们的应用非常简单的话，我们可以在 Controller 里面处理常见的业务逻辑。但是如果我们有一个功能想在多个控制器、或者多个模板里面复用的话，那么我们就可以把公共的功能单独抽取出来作为一个模块（Model）。 Model 是逐步抽象的过程，一般我们会在Model 里面封装一些公共的方法让不同 Controller 使用，也可以在 Model 中实现和数据库打交道
+
+
+
+### 10.2、Model 里面封装公共的方法
+
+**1、新建 models/ tools.go**
+
+```go
+package models
+
+import (
+	"time"
+)
+
+//时间戳转换成日期
+func UnixToTime(timestamp int) string {
+	t := time.Unix(int64(timestamp), 0)
+	return t.Format("2006-01-02 15:04:05")
+}
+
+//日期转换成时间戳 2020-05-02 15:04:05
+func DateToUnix(str string) int64 {
+	template := "2006-01-02 15:04:05"
+	t, err := time.ParseInLocation(template, str, time.Local)
+	if err != nil {
+		return 0
+	}
+	return t.Unix()
+}
+
+//获取时间戳
+func GetUnix() int64 {
+	return time.Now().Unix()
+}
+
+//获取当前的日期
+func GetDate() string {
+	template := "2006-01-02 15:04:05"
+	return time.Now().Format(template)
+}
+
+//获取年月日
+func GetDay() string {
+	template := "20060102"
+	return time.Now().Format(template)
+}
+
+```
+
+
+
+### 10.3、控制器中调用 Model
+
+```go
+package controllers
+import ( 
+    "gin_demo/models"
+)
+
+day := models.GetDay()
+```
+
+
+
+### 10.4、调用 Model 注册全局模板函数
+
+**models/tools.go**
+
+//时间戳间戳转换成日期
+
+```go
+func UnixToDate(timestamp int64) string {
+    t := time.Unix(timestamp, 0)
+    return t.Format("2006-01-02 15:04:05")
+}
+```
+
+**main.go**
+
+//注册全局模板函数 注意顺序，注册模板函数需要在加载模板上面
+
+```go
+r := gin.Default()
+r.SetFuncMap(template.FuncMap{ 
+    "unixToDate": models.UnixToDate, 
+})
+```
+
+**控制器**
+
+```go
+func (c UserController) Add(ctx *gin.Context) {
+    ctx.HTML(http.StatusOK, "admin/user/add.html", gin.H{ 
+        "now": models.GetUnix(), 
+    })
+}
+```
+
+**模板**
+
+```html
+<h2>{{.now | unixToDate}}</h2>
+```
+
+
+
+### 10.5、Golang Md5 加密
+
+打开 golang 包对应的网站：https://pkg.go.dev/，搜索 md5
+
+方法一：
+
+```go
+data := []byte("123456")
+has := md5.Sum(data)
+md5str := fmt.Sprintf("%x", has)
+fmt.Println(md5str)
+```
+
+方法二：
+
+```go
+h := md5.New()
+io.WriteString(h, "123456")
+fmt.Printf("%x\n", h.Sum(nil))
+```
+
+
+
+
+
+## 十一、Gin 文件上传
+
+注意：需要在上传文件的 form 表单上面需要加入 enctype="multipart/form-data"
+
+
+
+### 11.1、单文件上传
+
+https://gin-gonic.com/zh-cn/docs/examples/upload-file/single-file/
+
+**官方示例：**
+
+```go
+package models
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"log"
+	"net/http"
+)
+
+func main() {
+	router := gin.Default()
+	// 为 multipart forms 设置较低的内存限制 (默认是 32 MiB)
+	router.MaxMultipartMemory = 8 << 20 // 8 MiB
+	router.POST("/upload", func(c *gin.Context) {
+		// 单文件
+		file, _ := c.FormFile("file")
+		log.Println(file.Filename)
+		// 上传文件至指定目录
+		c.SaveUploadedFile(file, dst)
+		c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
+	})
+	router.Run(":8080")
+}
+
+```
+
+
+
+**项目中实现文件上传**
+
+**1、定义模板 需要在上传文件的 form 表单上面需要加入 enctype="multipart/form-data"**
+
+```html
+<!-- 相当于给模板定义一个名字 define end 成对出现-->
+{{ define "admin/user/add.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        <form action="/admin/user/doAdd" method="post" enctype="multipart/form-data">
+            用户名： <input type="text" name="username" placeholder="用户名"> 
+            <br> 
+            <br>
+            头 像：<input type="file" name="face"><br> <br>
+        	<input type="submit" value="提交">
+        </form>
+    </body>
+    </html>
+{{ end }}
+```
+
+
+
+**2、定义业务逻辑**
+
+```go
+package models
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"path"
+)
+
+func (c UserController) DoAdd(ctx *gin.Context) {
+	username := ctx.PostForm("username")
+	file, err := ctx.FormFile("face")
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+            "message": err.Error()
+        })
+		return
+	}
+    
+	// 上传文件到指定的目录
+	dst := path.Join("./static/upload", file.Filename)
+	fmt.Println(dst)
+	ctx.SaveUploadedFile(file, dst)
+	ctx.JSON(http.StatusOK, gin.H{
+        "message": fmt.Sprintf("'%s' uploaded!", file.Filename), 
+        "username": username
+    })
+}
+```
+
+
+
+### 11.2、多文件上传--不同名字的多个文件
+
+**1、定义模板 需要在上传文件的 form 表单上面需要加入 enctype="multipart/form-data"**
+
+```html
+<!-- 相当于给模板定义一个名字 define end 成对出现-->
+{{ define "admin/user/add.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        <form action="/admin/user/doAdd" method="post" enctype="multipart/form-data">
+            用户名： <input type="text" name="username" placeholder="用户名">
+            <br> 
+            <br>
+            头 像 1：<input type="file" name="face1">
+            <br> 
+            <br>
+            头 像 2：<input type="file" name="face2">
+            <br> 
+            <br>
+            <input type="submit" value="提交">
+        </form>
+    </body>
+    </html>
+{{ end }}
+```
+
+**2、定义业务逻辑**
+
+```go
+package models
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"path"
+)
+
+func (c UserController) DoAdd(ctx *gin.Context) {
+	username := ctx.PostForm("username")
+	face1, err1 := ctx.FormFile("face1")
+	face2, err2 := ctx.FormFile("face2")
+	// 上传文件到指定的目录
+	if err1 == nil {
+		dst1 := path.Join("./static/upload", face1.Filename)
+		ctx.SaveUploadedFile(face1, dst1)
+	}
+	if err2 == nil {
+		dst2 := path.Join("./static/upload", face2.Filename)
+		ctx.SaveUploadedFile(face2, dst2)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "文件上传成功", "username": username})
+	// ctx.String(200, username)
+}
+
+```
+
+
+
+### 11.3、多文件上传--相同名字的多个文件
+
+参考：https://gin-gonic.com/zh-cn/docs/examples/upload-file/multiple-file/
+
+**1、定义模板 需要在上传文件的 form 表单上面需要加入 enctype="multipart/form-data"**
+
+```html
+<!-- 相当于给模板定义一个名字 define end 成对出现-->
+{{ define "admin/user/add.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        <form action="/admin/user/doAdd" method="post" enctype="multipart/form-data">
+            用户名： <input type="text" name="username" placeholder="用户名"> 
+			<br> 
+			<br>
+			头 像 1：<input type="file" name="face[]">
+            <br> 
+            <br>
+            头 像 2：<input type="file" name="face[]">
+            <br> 
+            <br>
+            <input type="submit" value="提交">
+        </form>
+    </body>
+    </html>
+{{ end }}
+```
+
+**2、定义业务逻辑**
+
+```go
+package models
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"path"
+)
+
+func (c UserController) DoAdd(ctx *gin.Context) {
+	username := ctx.PostForm("username")
+    
+	// Multipart form
+	form, _ := ctx.MultipartForm()
+	files := form.File["face[]"]
+    
+	// var dst;
+	for _, file := range files {
+		// 上传文件至指定目录
+		dst := path.Join("./static/upload", file.Filename)
+		ctx.SaveUploadedFile(file, dst)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+        "message": "文件上传成功", 
+        "username": username
+    })
+}
+
+```
+
+
+
