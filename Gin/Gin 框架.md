@@ -1989,3 +1989,905 @@ func (c UserController) DoAdd(ctx *gin.Context) {
 
 
 
+
+
+### 11.4、文件上传 按照日期存储
+
+**1、定义模板 需要在上传文件的 form 表单上面需要加入 enctype="multipart/form-data"**
+
+```html
+<!-- 相当于给模板定义一个名字 define end 成对出现-->
+{{ define "admin/user/add.html" }}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+    <body>
+        <form action="/admin/user/doAdd" method="post" enctype="multipart/form-data">
+            用户名： <input type="text" name="username" placeholder="用户名"> 
+            <br> 
+            <br>
+            头 像： <input type="file" name="face">
+            <br> 
+            <br>
+            <input type="submit" value="提交">
+        </form>
+    </body>
+    </html>
+{{ end }}
+```
+
+**2、定义业务逻辑**
+
+```go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"os"
+	"path"
+	"strconv"
+)
+
+func (c UserController) DoAdd(ctx *gin.Context) {
+	username := ctx.PostForm("username")
+	//1、获取上传的文件
+	file, err1 := ctx.FormFile("face")
+	if err1 == nil {
+		//2、获取后缀名 判断类型是否正确 .jpg .png .gif .jpeg
+		extName := path.Ext(file.Filename)
+		allowExtMap := map[string]bool{".jpg": true, ".png": true, ".gif": true, ".jpeg": true}
+		if _, ok := allowExtMap[extName]; !ok {
+			ctx.String(200, "文件类型不合法")
+			return
+		}
+		//3、创建图片保存目录 static/upload/20200623
+		day := models.GetDay()
+		dir := "./static/upload/" + day
+		if err := os.MkdirAll(dir, 0666); err != nil {
+			log.Error(err)
+		}
+		//4、生成文件名称 144325235235.png
+		fileUnixName := strconv.FormatInt(models.GetUnix(), 10)
+		//static/upload/20200623/144325235235.png
+		saveDir := path.Join(dir, fileUnixName+extName)
+		ctx.SaveUploadedFile(file, saveDir)
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "文件上传成功", "username": username})
+	// ctx.String(200, username)
+}
+```
+
+
+
+**3、models/tools.go**
+
+```go
+package models
+
+import (
+	"time"
+)
+
+//时间戳转换成日期
+func UnixToTime(timestamp int) string {
+	t := time.Unix(int64(timestamp), 0)
+	return t.Format("2006-01-02 15:04:05")
+}
+
+//日期转换成时间戳 2020-05-02 15:04:05
+func DateToUnix(str string) int64 {
+	template := "2006-01-02 15:04:05"
+	t, err := time.ParseInLocation(template, str, time.Local)
+	if err != nil {
+		return 0
+	}
+	return t.Unix()
+}
+
+//获取时间戳
+func GetUnix() int64 {
+	return time.Now().Unix()
+}
+
+//获取当前的日期
+func GetDate() string {
+	template := "2006-01-02 15:04:05"
+	return time.Now().Format(template)
+}
+
+//获取年月日
+func GetDay() string {
+	template := "20060102"
+	return time.Now().Format(template)
+}
+
+```
+
+
+
+## 十二、Gin 中的Cookie
+
+
+
+### 12.1、Cookie 介绍
+
+● HTTP 是无状态协议。简单地说，当你浏览了一个页面，然后转到同一个网站的另一个页面，服务器无法认识到这是同一个浏览器在访问同一个网站。每一次的访问，都是没有任何关系的。如果我们要实现多个页面之间共享数据的话我们就可以使用Cookie 或者Session实现
+
+● cookie 是存储于访问者计算机的浏览器中。可以让我们用同一个浏览器访问同一个域名的时候共享数据。
+
+
+
+### 12.2、Cookie 能实现的功能
+
+1、保持用户登录状态 
+
+2、保存用户浏览的历史记录 
+
+3、猜你喜欢，智能推荐 
+
+4、电商网站的加入购物车
+
+
+
+### 12.3、设置和获取 Cookie
+
+https://gin-gonic.com/zh-cn/docs/examples/cookie/
+
+**设置 Cookie**
+
+```go
+c.SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool)
+```
+
+第一个参数 key 
+
+第二个参数 value 
+
+第三个参数 过期时间.如果只想设置 Cookie 的保存路径而不想设置存活时间，可以在第三个参数中传递 nil 
+
+四个参数 cookie 的路径 
+
+第五个参数 cookie 的路径 Domain 作用域 本地调试配置成 localhost , 正式上线配置成域名
+
+第六个参数是 secure ，当 secure 值为 true 时，cookie 在 HTTP 中是无效，在HTTPS 中才有效 
+
+第七个参数 httpOnly，是微软对 COOKIE 做的扩展。如果在 COOKIE 中设置了“httpOnly”属性，则通过程序（JS 脚本、applet 等）将无法读取到 COOKIE 信息，防止XSS 攻击产生
+
+
+
+**获取 Cookie**
+
+```go
+cookie, err := c.Cookie("name")
+```
+
+
+
+**完整 demo**
+
+```go
+package main
+
+import (
+	"gin_demo/models"
+	"github.com/gin-gonic/gin"
+	"html/template"
+)
+
+func main() {
+	r := gin.Default()
+	r.SetFuncMap(template.FuncMap{"unixToDate": models.UnixToDate})
+	r.GET("/", func(c *gin.Context) {
+		c.SetCookie("usrename", "张三", 3600, "/", "localhost", false, true)
+		c.String(200, "首页")
+	})
+	r.GET("/user", func(c *gin.Context) {
+		username, _ := c.Cookie("usrename")
+		c.String(200, "用户-"+username)
+	})
+	r.Run(":8080")
+}
+
+```
+
+
+
+### 12.4 、多个二级域名共享 cookie
+
+1、分别把 a.itying.com 和 b.itying.com 解析到我们的服务器
+
+2、我们想的是用户在 a.itying.com 中设置 Cookie 信息后在 b.itying.com 中获取刚才设置的cookie，也就是实现多个二级域名共享 cookie
+
+这时候的话我们就可以这样设置 cookie
+
+```go
+c.SetCookie("usrename", "张三", 3600, "/", ".itying.com", false, true)
+```
+
+
+
+
+
+## 十三、Gin 中的Session
+
+
+
+### 13.1、Session 简单介绍
+
+session 是另一种记录客户状态的机制，不同的是 Cookie 保存在客户端浏览器中，而session保存在服务器上。
+
+
+
+### 13.2、Session 的工作流程
+
+当客户端浏览器第一次访问服务器并发送请求时，服务器端会创建一个session 对象，生成一个类似于 key,value 的键值对，然后将 value 保存到服务器 将 key(cookie)返回到浏览器(客户)端。浏览器下次访问时会携带 key(cookie)，找到对应的 session(value).
+
+
+
+### 13.3、Gin 中使用 Session
+
+Gin 官方没有给我们提供 Session 相关的文档，这个时候我们可以使用第三方的Session 中间件来实现
+
+https://github.com/gin-contrib/sessions
+
+
+
+gin-contrib/sessions 中间件支持的存储引擎：
+
+• cookie 
+
+• memstore 
+
+• redis 
+
+• memcached 
+
+• mongodb
+
+
+
+### 13.4、基于 Cookie 存储 Session
+
+1、安装 session 包
+
+```go
+go get github.com/gin-contrib/sessions
+```
+
+2、基本的 session 用法
+
+```go
+package main
+
+import (
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.Default()
+	// 创建基于 cookie 的存储引擎，secret11111 参数是用于加密的密钥store := cookie.NewStore([]byte("secret11111"))
+	// 设置 session 中间件，参数 mysession，指的是 session 的名字，也是cookie 的名字// store 是前面创建的存储引擎，我们可以替换成其他存储引擎r.Use(sessions.Sessions("mysession", store))
+	r.GET("/", func(c *gin.Context) {
+		//初始化 session 对象
+		session := sessions.Default(c)
+		//设置过期时间
+		session.Options(sessions.Options{
+			MaxAge: 3600 * 6, // 6hrs
+		})
+		//设置 Session
+		session.Set("username", "张三")
+		session.Save()
+		c.JSON(200, gin.H{"msg": session.Get("username")})
+	})
+	r.GET("/user", func(c *gin.Context) {
+		// 初始化 session 对象
+		session := sessions.Default(c)
+		// 通过 session.Get 读取 session 值
+		username := session.Get("username")
+		c.JSON(200, gin.H{"username": username})
+	})
+	r.Run(":8000")
+}
+
+```
+
+
+
+### 13.5、基于 Redis 存储 Session
+
+如果我们想将 session 数据保存到 redis 中，只要将 session 的存储引擎改成redis 即可。
+
+使用 redis 作为存储引擎的例子：
+
+首先安装 redis 存储引擎的包
+
+```go
+go get github.com/gin-contrib/sessions/redis
+```
+
+例子：
+
+```go
+package main
+
+import (
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/redis"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.Default()
+	// 初始化基于 redis 的存储引擎
+	// 参数说明：
+	// 第 1 个参数 - redis 最大的空闲连接数
+	// 第 2 个参数 - 数通信协议 tcp 或者 udp
+	// 第 3 个参数 - redis 地址, 格式，host:port
+	// 第 4 个参数 - redis 密码
+	// 第 5 个参数 - session 加密密钥
+	store, _ := redis.NewStore(10, "tcp", "localhost:6379", "", []byte("secret"))
+	r.Use(sessions.Sessions("mysession", store))
+	r.GET("/", func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set("username", "李四")
+		session.Save()
+		c.JSON(200, gin.H{"username": session.Get("username")})
+	})
+	r.GET("/user", func(c *gin.Context) {
+		// 初始化 session 对象
+		session := sessions.Default(c)
+		// 通过 session.Get 读取 session 值
+		username := session.Get("username")
+		c.JSON(200, gin.H{"username": username})
+	})
+	r.Run(":8000")
+}
+
+```
+
+
+
+## 十四、Gin 中使用GORM操作mysql 数据库
+
+
+
+### 14.1、GORM 简单介绍
+
+GORM 是 Golang 的一个 orm 框架。简单说，ORM 就是通过实例对象的语法，完成关系型数据库的操作的技术，是"对象-关系映射"（Object/Relational Mapping）的缩写。使用ORM框架可以让我们更方便的操作数据库。
+
+**GORM 官方支持的数据库类型有： MySQL, PostgreSQL, SQlite, SQL Server**
+
+![image-20230810214800600](./Gin%20%E6%A1%86%E6%9E%B6.assets/image-20230810214800600.png)
+
+**特性**
+
+- 全功能 ORM
+- 关联 (Has One，Has Many，Belongs To，Many To Many，多态，单表继承)
+- Create，Save，Update，Delete，Find 中钩子方法
+- 支持 `Preload`、`Joins` 的预加载
+- 事务，嵌套事务，Save Point，Rollback To Saved Point
+- Context、预编译模式、DryRun 模式
+- 批量插入，FindInBatches，Find/Create with Map，使用 SQL 表达式、Context Valuer 进行 CRUD
+- SQL 构建器，Upsert，数据库锁，Optimizer/Index/Comment Hint，命名参数，子查询
+- 复合主键，索引，约束
+- Auto Migration
+- 自定义 Logger
+- 灵活的可扩展插件 API：Database Resolver（多数据库，读写分离）、Prometheus…
+- 每个特性都经过了测试的重重考验
+- 开发者友好
+
+官方文档：https://gorm.io/zh_CN/docs/index.html
+
+
+
+### 14.2、Gin 中使用 GORM
+
+#### **1、安装**
+
+如果使用 go mod 管理项目的话可以忽略此步骤
+
+```go
+go get -u gorm.io/gorm
+go get -u gorm.io/driver/mysql
+```
+
+
+
+#### **2、Gin 中使用 Gorm 连接数据库**
+
+在 models 下面新建 core.go ，建立数据库链接
+
+```go
+package models
+
+import (
+	"fmt"
+	"gorm.io/gorm"
+)
+
+var DB *gorm.DB
+var err error
+
+func init() {
+	dsn := "root:123456@tcp(192.168.0.6:3306)/gin?charset=utf8mb4&parseTime=True&loc=L
+	ocal
+	"DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+```
+
+
+
+#### **3、定义操作数据库的模型**
+
+Gorm 官方给我们提供了详细的：
+
+https://gorm.io/zh_CN/docs/models.html
+
+虽然在 gorm 中可以指定字段的类型以及自动生成数据表，但是在实际的项目开发中，我们是先设计数据库表，然后去实现编码的。
+
+
+
+**在实际项目中定义数据库模型注意以下几点：**
+
+**1、结构体的名称必须首字母大写** ，并和数据库表名称对应。例如：表名称为user 结构体名称定义成 User，表名称为 article_cate 结构体名称定义成 ArticleCate
+
+2、结构体中的**字段名称首字母必须大写**，并和数据库表中的字段一一对应。例如：下面结构体中的 Id 和数据库中的 id 对应,Username 和数据库中的 username 对应，Age 和数据库中的 age 对应，Email 和数据库中的 email 对应，AddTime 和数据库中的add_time 字段对应
+
+3、**默认情况表名是结构体名称的复数形式**。如果我们的结构体名称定义成User，表示这个模型默认操作的是 users 表。
+
+4、我们可以使用结构体中的自定义方法 TableName 改变结构体的默认表名称，如下:
+
+```go
+func (User) TableName() string {
+    return "user"
+}
+```
+
+表示把 User 结构体默认操作的表改为 user 表
+
+
+
+**定义 user 模型：**
+
+```go
+package models
+
+type User struct { // 默认表名是 `users`
+	Id       int
+	Username string
+	Age      int
+	Email    string
+	AddTime  int
+}
+
+func (User) TableName() string {
+	return "user"
+}
+
+```
+
+**关于更多模型定义的方法参考：https://gorm.io/zh_CN/docs/conventions.html**
+
+
+
+**gorm.Model**
+
+GORM 定义一个 gorm.Model 结构体，其包括字段 ID、CreatedAt、UpdatedAt、DeletedAt
+
+// gorm.Model 的定义
+
+```go
+type Model struct {
+	ID uint `gorm:"primaryKey"` 
+    CreatedAt time.Time
+    UpdatedAt time.Time
+    DeletedAt gorm.DeletedAt `gorm:"index"` 
+}
+```
+
+
+
+### 14.3、Gin GORM CURD
+
+找到要操作数据库表的控制器，然后引入 models 模块
+
+
+
+#### **1、增加**
+
+增加成功后会返回刚才增加的记录
+
+```go
+func (con UserController) Add(c *gin.Context) {
+    user := models.User{
+        Username: "itying.com", 
+        Age: 18, 
+        Email: "itying@qq.com", 
+        AddTime: int(time.Now().Unix()), 
+    }
+    
+    result := models.DB.Create(&user) // 通过数据的指针来创建
+    
+    if result.RowsAffected > 1 {
+        fmt.Print(user.Id)
+    }
+    
+    fmt.Println(result.RowsAffected)
+    fmt.Println(user.Id)
+    c.String(http.StatusOK, "add 成功")
+}
+```
+
+更多增加语句:https://gorm.io/zh_CN/docs/create.html
+
+
+
+#### **2、查找**
+
+查找全部
+
+```go
+func (con UserController) Index(c *gin.Context) {
+    user := []models.User{}
+    models.DB.Find(&user)
+    c.JSON(http.StatusOK, gin.H{ 
+        "success": true, 
+        "result": user, 
+    })
+}
+```
+
+指定条件查找
+
+```go
+func (con UserController) Index(c *gin.Context) {
+    user := []models.User{}
+    models.DB.Where("username=?", "王五").Find(&user)
+    c.JSON(http.StatusOK, gin.H{ 
+        "success": true, 
+        "result": user, 
+    })
+}
+```
+
+更多查询语句：https://gorm.io/zh_CN/docs/query.html
+
+
+
+#### 3、修改
+
+```go
+func (con UserController) Edit(c *gin.Context) {
+    user := models.User{Id: 7}
+    models.DB.Find(&user)
+    user.Username = "gin gorm" 
+    user.Age = 1
+    models.DB.Save(&user)
+    c.String(http.StatusOK, "Edit")
+}
+```
+
+更多修改的方法参考：https://gorm.io/zh_CN/docs/update.html
+
+
+
+#### 4、删除
+
+```go
+func (con UserController) Delete(c *gin.Context) {
+    user := models.User{Id: 8}
+    models.DB.Delete(&user)
+    c.String(http.StatusOK, "Delete")
+}
+```
+
+更多删除的方法参考:https://gorm.io/zh_CN/docs/delete.html
+
+
+
+#### 5、批量删除
+
+```go
+db.Where("email LIKE ?", "%jinzhu%").Delete(Email{})
+// DELETE from emails where email LIKE "%jinzhu%";
+
+db.Delete(Email{}, "email LIKE ?", "%jinzhu%")
+// DELETE from emails where email LIKE "%jinzhu%";
+
+func (con UserController) DeleteAll(c *gin.Context) {
+    user := models.User{}
+    models.DB.Where("id>9").Delete(&user)
+    c.String(http.StatusOK, "DeleteAll")
+}
+```
+
+更多删除的方法参考:https://gorm.io/zh_CN/docs/delete.html
+
+
+
+### 14.4、Gin GORM 查询语句详解
+
+https://gorm.io/zh_CN/docs/query.html
+
+1、Where 
+
+= 
+
+< 
+
+<= 
+
+\>= 
+
+!= 
+
+IS 
+
+NOT NULL 
+
+IS NULL 
+
+BETWEEN AND 
+
+NOT BETWEEN AND 
+
+IN 
+
+OR 
+
+AND 
+
+NOT 
+
+LIKE
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id<3").Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, })
+
+var n = 5
+nav := []models.Nav{}
+models.DB.Where("id>?", n).Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, 
+})
+```
+
+```go
+var n1 = 3
+var n2 = 9
+nav := []models.Nav{}
+models.DB.Where("id > ? AND id < ?", n1, n2).Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, 
+})
+```
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id in (?)", []int{3, 5, 6}).Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, 
+})
+```
+
+```go
+nav := []models.Nav{}
+models.DB.Where("title like ?", "%会%").Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, 
+})
+```
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id between ? and ?", 3, 6).Find(&nav)
+c.JSON(http.StatusOK, gin.H{ 
+    "success": true, 
+    "result": nav, 
+})
+```
+
+
+
+#### 2、Or 条件
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id=? OR id=?", 2, 3).Find(&nav)
+```
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id=?", 2).Or("id=?", 3).Or("id=4").Find(&nav)
+```
+
+
+
+#### 3、选择字段查询
+
+```go
+nav := []models.Nav{}
+models.DB.Select("id, title,url").Find(&nav)
+```
+
+
+
+#### 4、排序 Limit 、Offset
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id>2").Order("id Asc").Find(&nav)
+
+nav := []models.Nav{}
+models.DB.Where("id>2").Order("sort Desc").Order("id Asc").Find(&nav)
+
+nav := []models.Nav{}
+odels.DB.Where("id>1").Limit(2).Find(&nav)
+```
+
+**跳过 2 条查询 2 条**
+
+```go
+nav := []models.Nav{}
+models.DB.Where("id>1").Offset(2).Limit(2).Find(&nav)
+```
+
+
+
+#### 5、获取总数
+
+```go
+nav := []models.Nav{}
+var num int
+models.DB.Where("id > ?", 2).Find(&nav).Count(&num)
+```
+
+
+
+#### 6、Distinct
+
+从模型中选择不相同的值
+
+```go
+nav := []models.Nav{}
+models.DB.Distinct("title").Order("id desc").Find(&nav)
+c.JSON(200, gin.H{ 
+    "nav": nav, 
+})
+```
+
+```sql
+SELECT DISTINCT `title` FROM `nav` ORDER BY id desc
+```
+
+
+
+#### 7、Scan
+
+```go
+type Result struct {
+    Name string
+    Age int
+}
+var result Result
+db.Table("users").Select("name", "age").Where("name = ?", "Antonio").Scan(&result)
+
+// 原生 SQL
+db.Raw("SELECT name, age FROM users WHERE name = ?", "Antonio").Scan(&result)
+
+var result []models.User
+models.DB.Raw("SELECT * FROM user").Scan(&result)
+fmt.Println(result)
+```
+
+
+
+#### 8、Join 
+
+```go
+type result struct {
+    Name string
+    Email string
+}
+
+db.Model(&User{}).Select("users.name, emails.email").Joins("left join emails on emails.user_id = users.id").Scan(&result{})
+```
+
+```sql
+SELECT users.name, emails.email FROM `users` left join emails on emails.user_id = users.id
+```
+
+
+
+### 14.4、Gin GORM 查看执行的sql
+
+```go
+func init() {
+    dsn :="root:123456@tcp(192.168.0.6:3306)/gin?charset=utf8mb4&parseTime=True&loc=Local" 
+    
+    DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+        QueryFields: true, 
+    })
+    
+    // DB.Debug()
+    if err != nil {
+        fmt.Println(err)
+    }
+}
+```
+
+
+
+## 十五、原生SQL 和SQL 生成器
+
+更多使用方法参考：
+
+https://gorm.io/zh_CN/docs/sql_builder.html
+
+
+
+### 1、使用原生 sql 删除 user 表中的一条数据
+
+```go
+result := models.DB.Exec("delete from user where id=?", 3)
+fmt.Println(result.RowsAffected)
+```
+
+
+
+### 2、使用原生 sql 修改 user 表中的一条数据
+
+```go
+result := models.DB.Exec("update user set username=? where id=2", "哈哈")
+fmt.Println(result.RowsAffected)
+```
+
+
+
+### 3、查询 uid=2 的数据
+
+```go
+var result models.User
+models.DB.Raw("SELECT * FROM user WHERE id = ?", 2).Scan(&result)
+fmt.Println(result)
+```
+
+
+
+### 4、查询 User 表中所有的数据
+
+```go
+var result []models.User
+models.DB.Raw("SELECT * FROM user").Scan(&result)
+fmt.Println(result)
+```
+
+
+
+### 5、统计 user 表的数量
+
+```go
+var count int
+row := models.DB.Raw("SELECT count(1) FROM user").Row(&count )
+row.Scan(&count)
+```
+
