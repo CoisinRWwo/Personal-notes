@@ -1,5 +1,3 @@
-package cn.hsa.zephyr.medicine_psi.redis;
-
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.ValueOperations;
