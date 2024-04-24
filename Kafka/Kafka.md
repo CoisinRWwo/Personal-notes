@@ -12,7 +12,7 @@ Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**�
 
 ### 1.2.1 传统消息队列的应用场景
 
-![image-20211102203756275](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211102203756275.png)
+![image-20211102203756275](D:\WorkSpace\Personal-notes\Kafka\img\image-20211102203756275.png)
 
 使用消息队列的好处
 
@@ -46,19 +46,19 @@ Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**�
 
 消息生产者生产消息发送到Queue中，然后消息消费者从Queue中取出并且消费消息。 消息被消费以后，queue 中不再有存储，所以消息消费者不可能消费到已经被消费的消息。 Queue 支持存在多个消费者，但是对一个消息而言，只会有一个消费者可以消费。
 
-![image-20211102205229738](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211102205229738.png)
+![image-20211102205229738](D:\WorkSpace\Personal-notes\Kafka\img\image-20211102205229738.png)
 
 （2）发布/订阅模式（一对多，消费者消费数据之后不会清除消息）
 
 消息生产者（发布）将消息发布到 topic 中，同时有多个消息消费者（订阅）消费该消 息。和点对点方式不同，发布到 topic 的消息会被所有订阅者消费。
 
-![image-20211102205332045](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211102205332045.png)
+![image-20211102205332045](D:\WorkSpace\Personal-notes\Kafka\img\image-20211102205332045.png)
 
 ---
 
 ## 1.3 Kafka 基础架构
 
-![image-20211102205952833](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20211102205952833.png)
+![image-20211102205952833](D:\WorkSpace\Personal-notes\Kafka\img\image-20211102205952833.png)
 
 1）Producer ：消息生产者，就是向 kafka broker 发消息的客户端； 
 
@@ -101,7 +101,7 @@ Kafka 是一个**分布式**的基于**发布/订阅模式**的**消息队列**�
 
 http://kafka.apache.org/downloads.html
 
-![image-20211102221217514](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211102221217514.png)
+![image-20211102221217514](D:\WorkSpace\Personal-notes\Kafka\img\image-20211102221217514.png)
 
 ---
 
@@ -283,13 +283,13 @@ done
 
 ## 3.1 Kafka 工作流程及文件存储机制
 
-![image-20211103210543029](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103210543029.png)
+![image-20211103210543029](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103210543029.png)
 
 Kafka 中消息是以 **topic** 进行分类的，生产者生产消息，消费者消费消息，都是面向 topic 的。
 
 topic 是逻辑上的概念，而 partition 是物理上的概念，每个 partition 对应于一个 log 文 件，该 log 文件中存储的就是 producer 生产的数据。Producer 生产的数据会被不断追加到该 log 文件末端，且每条数据都有自己的 offset。消费者组中的每个消费者，都会实时记录自己 消费到了哪个 offset，以便出错恢复时，从上次的位置继续消费。
 
-![image-20211103210628020](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103210628020.png)
+![image-20211103210628020](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103210628020.png)
 
 由于生产者生产的消息会不断追加到 log 文件末尾，为防止 log 文件过大导致数据定位 效率低下，Kafka 采取了**分片**和**索引**机制，将每个 partition 分为多个 segment。每个 segment 对应两个文件——“.index”文件和“.log”文件。这些文件位于一个文件夹下，该文件夹的命名 规则为：topic 名称+分区序号。例如，first 这个 topic 有三个分区，则其对应的文件夹为 first-0,first-1,first-2。
 
@@ -304,7 +304,7 @@ topic 是逻辑上的概念，而 partition 是物理上的概念，每个 parti
 
 index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下图为 index 文件和 log 文件的结构示意图。
 
-![image-20211103210725388](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103210725388.png)
+![image-20211103210725388](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103210725388.png)
 
 **“.index”文件存储大量的索引信息，“.log”文件存储大量的数据**，索引文件中的元 数据指向对应数据文件中 message 的物理偏移地址。
 
@@ -326,7 +326,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 我们需要将 producer 发送的数据封装成一个 ProducerRecord 对象。
 
-![image-20211103210830091](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103210830091.png)
+![image-20211103210830091](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103210830091.png)
 
 （1）指明 partition 的情况下，直接将指明的值直接作为 partiton 值；
 
@@ -342,7 +342,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 **为保证 producer 发送的数据，能可靠的发送到指定的 topic，topic 的每个 partition 收到 producer 发送的数据后，都需要向 producer 发送 ack（acknowledgement 确认收到），如果 producer 收到 ack，就会进行下一轮的发送，否则重新发送数据。**
 
-![image-20211103210905449](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103210905449.png)
+![image-20211103210905449](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103210905449.png)
 
 1）副本数据同步策略
 
@@ -379,19 +379,19 @@ acks：
 
 **acks = 1 数据丢失案例**
 
-![image-20211103211120528](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103211120528.png)
+![image-20211103211120528](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103211120528.png)
 
 -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower 全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会 造成数据重复。
 
 **acks = -1 数据重复案例**
 
-![image-20211103211215289](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103211215289.png)
+![image-20211103211215289](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103211215289.png)
 
 
 
 4）故障处理细节
 
-![image-20211103211238394](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211103211238394.png)
+![image-20211103211238394](D:\WorkSpace\Personal-notes\Kafka\img\image-20211103211238394.png)
 
 LEO：指的是每个副本最大的 offset；
 
@@ -453,11 +453,11 @@ Kafka 有两种分配策略，一是 RoundRobin，一是 Range。
 
 1）RoundRobin
 
-![image-20211104210616054](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20211104210616054.png)
+![image-20211104210616054](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104210616054.png)
 
 2）Range
 
-![image-20211104210649843](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211104210649843.png)
+![image-20211104210649843](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104210649843.png)
 
 
 
@@ -467,7 +467,7 @@ Kafka 有两种分配策略，一是 RoundRobin，一是 Range。
 
 由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。
 
-![image-20211104210714859](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211104210714859.png)
+![image-20211104210714859](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104210714859.png)
 
 **Kafka 0.9 版本之前，consumer 默认将 offset 保存在 Zookeeper 中，从 0.9 版本开始， consumer 默认将 offset 保存在 Kafka 一个内置的 topic 中，该 topic 为__consumer_offsets。**
 
@@ -548,7 +548,7 @@ Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是�
 
 零拷贝
 
-![image-20211104211004478](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211104211004478.png)
+![image-20211104211004478](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104211004478.png)
 
 
 
@@ -562,7 +562,7 @@ Controller 的管理工作都是依赖于 Zookeeper 的。
 
 以下为 partition 的 leader 选举过程：
 
-![image-20211104211056087](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211104211056087.png)
+![image-20211104211056087](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104211056087.png)
 
 
 
@@ -594,7 +594,7 @@ Kafka 从 0.11 版本开始引入了事务支持。事务可以保证 Kafka 在 
 
 Kafka 的 Producer 发送消息采用的是**异步发送**的方式。在消息发送的过程中，涉及到了 **两个线程——main 线程和 Sender 线程**，以及**一个线程共享变量——RecordAccumulator**。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。
 
-![image-20211104211244788](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211104211244788.png)
+![image-20211104211244788](D:\WorkSpace\Personal-notes\Kafka\img\image-20211104211244788.png)
 
 相关参数：
 
@@ -1058,7 +1058,7 @@ Producer 拦截器(interceptor)是在 Kafka 0.10 版本被引入的，主要用�
 
 实现一个简单的双 interceptor 组成的拦截链。第一个 interceptor 会在消息发送前将时间 戳信息加到消息 value 的最前部；第二个 interceptor 会在消息发送后更新成功发送消息数或 失败发送消息数。
 
-![image-20211108223223890](C:\Users\Admin\OneDrive\MarkDown\Kafka\img\image-20211108223223890.png)
+![image-20211108223223890](D:\WorkSpace\Personal-notes\Kafka\img\image-20211108223223890.png)
 
 2）案例实操
 
@@ -1336,4 +1336,4 @@ export PATH=$PATH:$KE_HOME/bin
 http://192.168.9.102:8048/ke
 ```
 
-![image-20211108223727157](C:\Users\Admin\AppData\Roaming\Typora\typora-user-images\image-20211108223727157.png)
+![image-20211108223727157](D:\WorkSpace\Personal-notes\Kafka\img\image-20211108223727157.png)
